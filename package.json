@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-baileys-service",
+  "version": "1.0.0",
+  "description": "Always-on WhatsApp connection using Baileys, kept alive on Render's free tier via UptimeRobot",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "express": "^4.19.2",
+    "pino": "^9.3.2",
+    "qrcode": "^1.5.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
