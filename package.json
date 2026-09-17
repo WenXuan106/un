@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-baileys-service",
   "version": "1.0.0",
-  "description": "Always-on WhatsApp connection using Baileys, kept alive on Render's free tier via UptimeRobot",
+  "description": "Always-on WhatsApp connection using Baileys, with a full chat UI",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
