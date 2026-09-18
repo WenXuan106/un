@@ -125,3 +125,427 @@
         <button onclick="fileInput('gif')">GIF</button>
         <button onclick="fileInput('sticker')">😀 Sticker (webp)</button>
       </div>
+      <input type="file" id="hiddenFileInput" style="display:none;" onchange="onFileChosen()" />
+
+      <input type="text" id="msgInput" placeholder="Type a message" onkeydown="if(event.key==='Enter') sendMessage(); else onTyping()" />
+
+      <button id="micBtn" onclick="toggleRecording()">🎤</button>
+      <button class="send" onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="locationModal">
+  <div class="modal">
+    <h3>Send location</h3>
+    <button onclick="sendMyLocation()">Use my current location</button>
+    <button onclick="closeModal('locationModal')" style="background:#2a3942;">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="contactModal">
+  <div class="modal">
+    <h3>Send contact</h3>
+    <input id="contactName" placeholder="Name" />
+    <input id="contactPhone" placeholder="Phone (with country code)" />
+    <button onclick="sendContactCard()">Send</button>
+    <button onclick="closeModal('contactModal')" style="background:#2a3942;">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="forwardModal">
+  <div class="modal">
+    <h3>Forward to</h3>
+    <select id="forwardTarget" style="width:100%;padding:8px;"></select>
+    <button onclick="doForward()">Forward</button>
+    <button onclick="closeModal('forwardModal')" style="background:#2a3942;">Cancel</button>
+  </div>
+</div>
+
+<script>
+let token = localStorage.getItem('wa_token') || ''
+let activeJid = null
+let chatsCache = []
+let typingTimeout = null
+let replyToId = null
+let forwardMessageId = null
+let mediaRecorder = null
+let recordedChunks = []
+
+if (token) { document.getElementById('tokenInput').value = token; boot() }
+
+function login () {
+  token = document.getElementById('tokenInput').value.trim()
+  if (!token) return
+  localStorage.setItem('wa_token', token)
+  boot()
+}
+
+async function boot () {
+  const res = await fetch('/api/chats?token=' + encodeURIComponent(token))
+  if (!res.ok) { alert('Invalid token'); return }
+  document.getElementById('login').style.display = 'none'
+  document.getElementById('app').style.display = 'flex'
+  await loadChats()
+  connectStream()
+}
+
+async function loadChats () {
+  const res = await fetch('/api/chats?token=' + encodeURIComponent(token))
+  chatsCache = await res.json()
+  renderChatList()
+}
+
+function renderChatList () {
+  const list = document.getElementById('chatList')
+  list.innerHTML = ''
+  for (const chat of chatsCache) {
+    const div = document.createElement('div')
+    div.className = 'chat-item' + (chat.jid === activeJid ? ' active' : '')
+    div.onclick = () => openChat(chat.jid, chat.name)
+    const preview = chat.lastMessage
+      ? (chat.lastMessage.type !== 'text' ? '[' + chat.lastMessage.type + ']' : chat.lastMessage.text)
+      : ''
+    div.innerHTML = `<img class="avatar" src="${chat.avatarUrl || ''}" onerror="this.removeAttribute('src')" />
+      <div class="chat-meta"><div class="name">${escapeHtml(chat.name)}${chat.isGroup ? ' 👥' : ''}</div><div class="preview">${escapeHtml(preview)}</div></div>`
+    list.appendChild(div)
+  }
+}
+
+function toggleStarred () {
+  const starredEl = document.getElementById('starredList')
+  const chatEl = document.getElementById('chatList')
+  if (starredEl.style.display === 'none') {
+    chatEl.style.display = 'none'
+    starredEl.style.display = 'block'
+    loadStarred()
+  } else {
+    starredEl.style.display = 'none'
+    chatEl.style.display = 'block'
+  }
+}
+
+async function loadStarred () {
+  const res = await fetch('/api/starred?token=' + encodeURIComponent(token))
+  const items = await res.json()
+  const el = document.getElementById('starredList')
+  el.innerHTML = items.map(i => `<div class="chat-item" onclick="openChat('${i.jid}', '${escapeHtml(i.chatName)}')">
+    <div class="chat-meta"><div class="name">${escapeHtml(i.chatName)}</div><div class="preview">${escapeHtml(i.message.text || '[' + i.message.type + ']')}</div></div>
+  </div>`).join('') || '<div style="color:#8696a0;padding:12px;">No starred messages</div>'
+}
+
+let searchTimeout = null
+function onSearch () {
+  clearTimeout(searchTimeout)
+  const q = document.getElementById('searchBox').value.trim()
+  const resultsEl = document.getElementById('searchResults')
+  const chatEl = document.getElementById('chatList')
+  const starredEl = document.getElementById('starredList')
+
+  if (!q) { resultsEl.style.display = 'none'; chatEl.style.display = 'block'; return }
+
+  searchTimeout = setTimeout(async () => {
+    starredEl.style.display = 'none'
+    chatEl.style.display = 'none'
+    resultsEl.style.display = 'block'
+    const res = await fetch('/api/search?q=' + encodeURIComponent(q) + '&token=' + encodeURIComponent(token))
+    const items = await res.json()
+    resultsEl.innerHTML = items.map(i => `<div class="chat-item" onclick="openChat('${i.jid}', '${escapeHtml(i.chatName)}')">
+      <div class="chat-meta"><div class="name">${escapeHtml(i.chatName)}</div><div class="preview">${escapeHtml(i.message.text)}</div></div>
+    </div>`).join('') || '<div style="color:#8696a0;padding:12px;">No results</div>'
+  }, 300)
+}
+
+async function openChat (jid, name) {
+  activeJid = jid
+  cancelReply()
+  document.getElementById('chatName').textContent = name
+  document.getElementById('chatStatus').textContent = ''
+  document.getElementById('groupPanel').style.display = 'none'
+  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'))
+  document.getElementById('searchResults').style.display = 'none'
+  document.getElementById('starredList').style.display = 'none'
+  document.getElementById('chatList').style.display = 'block'
+  await loadChats()
+
+  const chatMeta = chatsCache.find(c => c.jid === jid)
+  document.getElementById('groupInfoBtn').style.display = chatMeta?.isGroup ? 'inline' : 'none'
+  if (chatMeta?.isGroup) renderGroupParticipants(chatMeta.participants)
+
+  const res = await fetch(`/api/chats/${encodeURIComponent(jid)}/messages?token=${encodeURIComponent(token)}`)
+  const messages = await res.json()
+  const container = document.getElementById('messages')
+  container.innerHTML = ''
+  for (const m of messages) appendMessage(m)
+  container.scrollTop = container.scrollHeight
+}
+
+function renderGroupParticipants (participants) {
+  document.getElementById('groupParticipants').innerHTML = (participants || [])
+    .map(p => `<div class="participant">${escapeHtml(p.id)} ${p.admin ? '👑' : ''}</div>`).join('')
+}
+
+function toggleGroupPanel () {
+  const panel = document.getElementById('groupPanel')
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none'
+}
+
+const EMOJI_SET = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+
+function ticksHtml (status) {
+  if (status === 'sent') return '<span class="ticks">✓</span>'
+  if (status === 'delivered') return '<span class="ticks">✓✓</span>'
+  if (status === 'read') return '<span class="ticks read">✓✓</span>'
+  return ''
+}
+
+function bodyHtml (m) {
+  const url = `/api/media/${m.id}?token=${encodeURIComponent(token)}`
+  if (m.deleted) return '<i>This message was deleted</i>'
+  if (m.type === 'image') return `<img src="${url}" />` + (m.text ? `<div>${escapeHtml(m.text)}</div>` : '')
+  if (m.type === 'video') return `<video src="${url}" controls></video>`
+  if (m.type === 'gif') return `<video src="${url}" autoplay loop muted></video>`
+  if (m.type === 'audio') return `<audio src="${url}" controls></audio>`
+  if (m.type === 'sticker') return `<img class="sticker-img" src="${url}" />`
+  if (m.type === 'location') return `<a href="https://maps.google.com/?q=${m.lat},${m.lon}" target="_blank" style="color:#53bdeb;">📍 View location</a>`
+  if (m.type === 'contact') return `👤 ${escapeHtml(m.displayName || 'Contact')}`
+  return escapeHtml(m.text) + (m.edited ? '<span class="edited-tag">(edited)</span>' : '')
+}
+
+function appendMessage (m) {
+  const container = document.getElementById('messages')
+  const row = document.createElement('div')
+  row.className = 'msg-row ' + (m.fromMe ? 'mine' : 'theirs')
+  row.dataset.id = m.id
+  const bubble = document.createElement('div')
+  bubble.className = 'msg ' + (m.fromMe ? 'mine' : 'theirs') + (m.deleted ? ' deleted' : '')
+  bubble.dataset.id = m.id
+
+  const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const quoteHtml = m.quotedText ? `<div class="quote">${escapeHtml(m.quotedText)}</div>` : ''
+  const reactionsHtml = Object.values(m.reactions || {}).length
+    ? `<div class="reactions">${Object.values(m.reactions).join(' ')}</div>` : ''
+
+  bubble.innerHTML = `
+    <div class="msg-actions">
+      <span onclick="startReply('${m.id}')">↩️</span>
+      <span onclick="toggleReactionPicker('${m.id}')">😀</span>
+      <span onclick="toggleStar('${m.id}')">⭐</span>
+      <span onclick="openForward('${m.id}')">➡️</span>
+      ${m.fromMe && m.type === 'text' && !m.deleted ? `<span onclick="startEdit('${m.id}')">✏️</span>` : ''}
+      ${m.fromMe && !m.deleted ? `<span onclick="doDelete('${m.id}')">🗑️</span>` : ''}
+    </div>
+    <div class="reaction-picker" id="picker-${m.id}">${EMOJI_SET.map(e => `<span onclick="sendReaction('${m.id}','${e}')">${e}</span>`).join('')}</div>
+    ${quoteHtml}${bodyHtml(m)}
+    <div class="meta">${time} ${m.fromMe ? ticksHtml(m.status) : ''}</div>
+    ${reactionsHtml}
+  `
+  row.appendChild(bubble)
+  container.appendChild(row)
+  container.scrollTop = container.scrollHeight
+}
+
+function toggleReactionPicker (id) {
+  const el = document.getElementById('picker-' + id)
+  el.style.display = el.style.display === 'flex' ? 'none' : 'flex'
+}
+
+async function sendReaction (id, emoji) {
+  document.getElementById('picker-' + id).style.display = 'none'
+  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/react?token=${encodeURIComponent(token)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId: id, emoji })
+  })
+}
+
+function startReply (id) {
+  const bubble = document.querySelector(`.msg[data-id="${id}"]`)
+  replyToId = id
+  document.getElementById('replyPreview').style.display = 'block'
+  document.getElementById('replyPreviewText').textContent = bubble ? bubble.innerText.slice(0, 80) : ''
+  document.getElementById('msgInput').focus()
+}
+function cancelReply () { replyToId = null; document.getElementById('replyPreview').style.display = 'none' }
+
+function startEdit (id) {
+  const bubble = document.querySelector(`.msg[data-id="${id}"]`)
+  const current = bubble ? bubble.innerText.split('\n')[0] : ''
+  const newText = prompt('Edit message:', current)
+  if (newText === null) return
+  fetch(`/api/chats/${encodeURIComponent(activeJid)}/edit?token=${encodeURIComponent(token)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId: id, text: newText })
+  }).then(() => openChat(activeJid, document.getElementById('chatName').textContent))
+}
+
+function doDelete (id) {
+  if (!confirm('Delete this message for everyone?')) return
+  fetch(`/api/chats/${encodeURIComponent(activeJid)}/delete?token=${encodeURIComponent(token)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId: id })
+  }).then(() => openChat(activeJid, document.getElementById('chatName').textContent))
+}
+
+async function toggleStar (id) {
+  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/messages/${id}/star?token=${encodeURIComponent(token)}`, { method: 'POST' })
+}
+
+function openForward (id) {
+  forwardMessageId = id
+  const select = document.getElementById('forwardTarget')
+  select.innerHTML = chatsCache.map(c => `<option value="${c.jid}">${escapeHtml(c.name)}</option>`).join('')
+  openModal('forwardModal')
+}
+
+async function doForward () {
+  const toJid = document.getElementById('forwardTarget').value
+  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/forward?token=${encodeURIComponent(token)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId: forwardMessageId, toJid })
+  })
+  closeModal('forwardModal')
+}
+
+async function sendMessage () {
+  const input = document.getElementById('msgInput')
+  const text = input.value.trim()
+  if (!text || !activeJid) return
+  input.value = ''
+  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/send?token=${encodeURIComponent(token)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, quotedId: replyToId })
+  })
+  cancelReply()
+}
+
+function onTyping () {
+  if (!activeJid) return
+  clearTimeout(typingTimeout)
+  typingTimeout = setTimeout(() => {
+    fetch(`/api/chats/${encodeURIComponent(activeJid)}/typing?token=${encodeURIComponent(token)}`, { method: 'POST' })
+  }, 200)
+}
+
+function toggleAttachMenu () {
+  const el = document.getElementById('attachMenu')
+  el.style.display = el.style.display === 'block' ? 'none' : 'block'
+}
+
+let pendingFileKind = null
+function fileInput (kind) {
+  pendingFileKind = kind
+  document.getElementById('attachMenu').style.display = 'none'
+  document.getElementById('hiddenFileInput').click()
+}
+
+async function onFileChosen () {
+  const file = document.getElementById('hiddenFileInput').files[0]
+  if (!file || !activeJid) return
+  const form = new FormData()
+  form.append('file', file)
+  form.append('kind', pendingFileKind)
+  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/send-media?token=${encodeURIComponent(token)}`, { method: 'POST', body: form })
+  document.getElementById('hiddenFileInput').value = ''
+}
+
+function openModal (id) { document.getElementById(id).style.display = 'flex' }
+function closeModal (id) { document.getElementById(id).style.display = 'none' }
+
+function sendMyLocation () {
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    await fetch(`/api/chats/${encodeURIComponent(activeJid)}/location?token=${encodeURIComponent(token)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+    })
+    closeModal('locationModal')
+  }, () => alert('Could not get location'))
+}
+
+async function sendContactCard () {
+  const name = document.getElementById('contactName').value.trim()
+  const phone = document.getElementById('contactPhone').value.trim()
+  if (!name || !phone) return
+  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/contact?token=${encodeURIComponent(token)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, phone })
+  })
+  closeModal('contactModal')
+}
+
+async function toggleRecording () {
+  const btn = document.getElementById('micBtn')
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop()
+    btn.classList.remove('recording')
+    return
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    recordedChunks = []
+    mediaRecorder = new MediaRecorder(stream)
+    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data)
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' })
+      const form = new FormData()
+      form.append('file', blob, 'voice.webm')
+      form.append('kind', 'voice')
+      await fetch(`/api/chats/${encodeURIComponent(activeJid)}/send-media?token=${encodeURIComponent(token)}`, { method: 'POST', body: form })
+      stream.getTracks().forEach(t => t.stop())
+    }
+    mediaRecorder.start()
+    btn.classList.add('recording')
+  } catch (err) { alert('Microphone access denied') }
+}
+
+function connectStream () {
+  const es = new EventSource('/api/stream?token=' + encodeURIComponent(token))
+
+  es.addEventListener('message', (e) => {
+    const data = JSON.parse(e.data)
+    if (data.jid === activeJid) appendMessage(data.message)
+    loadChats()
+  })
+
+  es.addEventListener('status', (e) => {
+    const data = JSON.parse(e.data)
+    const bubble = document.querySelector(`.msg[data-id="${data.messageId}"]`)
+    if (bubble) {
+      const meta = bubble.querySelector('.meta')
+      const time = meta.textContent.split(' ')[0]
+      meta.innerHTML = `${time} ${ticksHtml(data.status)}`
+    }
+  })
+
+  es.addEventListener('reaction', (e) => {
+    const data = JSON.parse(e.data)
+    if (data.jid === activeJid) openChat(activeJid, document.getElementById('chatName').textContent)
+  })
+
+  es.addEventListener('edit', (e) => {
+    const data = JSON.parse(e.data)
+    if (data.jid === activeJid) openChat(activeJid, document.getElementById('chatName').textContent)
+  })
+
+  es.addEventListener('delete', (e) => {
+    const data = JSON.parse(e.data)
+    if (data.jid === activeJid) openChat(activeJid, document.getElementById('chatName').textContent)
+  })
+
+  es.addEventListener('presence', (e) => {
+    const data = JSON.parse(e.data)
+    if (data.jid === activeJid) {
+      document.getElementById('chatStatus').textContent =
+        data.state === 'composing' ? 'typing…' : (data.state === 'available' ? 'online' : '')
+    }
+  })
+}
+
+function escapeHtml (str) {
+  const div = document.createElement('div')
+  div.textContent = str || ''
+  return div.innerHTML
+}
+</script>
+
+</body>
+</html>
