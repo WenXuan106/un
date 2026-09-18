@@ -12,34 +12,69 @@
   #login button { padding: 8px 16px; font-size: 16px; margin-left: 8px; }
 
   #app { display: none; width: 100%; height: 100%; }
-  #sidebar { width: 320px; background: #111b21; border-right: 1px solid #222; overflow-y: auto; }
+  #sidebar { width: 320px; background: #111b21; border-right: 1px solid #222; display: flex; flex-direction: column; }
+  #sidebarTop { padding: 10px; display: flex; gap: 6px; }
+  #sidebarTop input { flex: 1; padding: 8px 12px; border-radius: 16px; border: none; background: #202c33; color: #e9edef; }
+  #sidebarTop button { background: #202c33; color: #e9edef; border: none; border-radius: 16px; padding: 8px 10px; cursor: pointer; }
+  #chatList, #starredList, #searchResults { overflow-y: auto; flex: 1; }
   .chat-item { display: flex; align-items: center; padding: 10px 12px; cursor: pointer; }
   .chat-item:hover { background: #202c33; }
   .chat-item.active { background: #2a3942; }
   .avatar { width: 44px; height: 44px; border-radius: 50%; background: #667781; margin-right: 12px; object-fit: cover; flex-shrink: 0; }
   .chat-meta { min-width: 0; }
   .chat-meta .name { color: #e9edef; font-weight: 500; }
-  .chat-meta .preview { color: #8696a0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-meta .preview { color: #8696a0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 
   #main { flex: 1; display: flex; flex-direction: column; background: #0b141a; }
-  #chatHeader { display: flex; align-items: center; padding: 10px 16px; background: #202c33; color: #e9edef; }
+  #chatHeader { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #202c33; color: #e9edef; }
+  #chatHeader .left { display: flex; align-items: center; }
   #chatHeader .status { font-size: 12px; color: #8696a0; margin-left: 12px; }
+  #groupInfoBtn { background: none; border: none; color: #8696a0; cursor: pointer; font-size: 18px; }
 
-  #messages { flex: 1; overflow-y: auto; padding: 16px; }
-  .msg-row { display: flex; margin-bottom: 6px; }
+  #groupPanel { position: absolute; right: 0; top: 0; width: 300px; height: 100%; background: #202c33; color: #e9edef; padding: 16px; display: none; overflow-y: auto; z-index: 20; }
+  #groupPanel .participant { padding: 6px 0; font-size: 14px; border-bottom: 1px solid #2a3942; }
+
+  #messages { flex: 1; overflow-y: auto; padding: 16px; position: relative; }
+  .msg-row { display: flex; margin-bottom: 10px; }
   .msg-row.mine { justify-content: flex-end; }
   .msg { max-width: 60%; padding: 6px 9px; border-radius: 8px; position: relative; }
   .msg.mine { background: #005c4b; color: #e9edef; }
   .msg.theirs { background: #202c33; color: #e9edef; }
+  .msg.deleted { font-style: italic; color: #8696a0; }
   .msg img, .msg video { max-width: 260px; border-radius: 6px; display: block; }
+  .msg .sticker-img { width: 130px; height: 130px; }
   .msg audio { width: 220px; }
   .msg .meta { font-size: 11px; color: #8696a0; margin-top: 2px; text-align: right; }
   .msg .ticks.read { color: #53bdeb; }
+  .msg .quote { border-left: 3px solid #00a884; background: rgba(255,255,255,0.05); padding: 4px 8px; margin-bottom: 4px; font-size: 13px; color: #8696a0; }
+  .msg .reactions { position: absolute; bottom: -10px; right: 4px; background: #2a3942; border-radius: 10px; padding: 1px 5px; font-size: 12px; }
+  .msg .edited-tag { font-size: 10px; color: #8696a0; margin-left: 4px; }
 
-  #composer { display: flex; padding: 10px; background: #202c33; }
-  #composer input { flex: 1; padding: 10px 14px; border: none; border-radius: 20px; font-size: 15px; background: #2a3942; color: #e9edef; }
+  .msg-actions { display: none; gap: 6px; position: absolute; top: -22px; background: #2a3942; padding: 2px 6px; border-radius: 6px; }
+  .msg-row:hover .msg-actions { display: flex; }
+  .msg-actions span { cursor: pointer; font-size: 13px; color: #8696a0; }
+  .msg-actions span:hover { color: #e9edef; }
+
+  #composer { display: flex; align-items: center; padding: 10px; background: #202c33; position: relative; }
+  #replyPreview { display: none; background: #2a3942; border-left: 3px solid #00a884; padding: 6px 10px; margin: 0 10px 6px; border-radius: 4px; color: #e9edef; font-size: 13px; position: absolute; bottom: 56px; left: 0; right: 0; }
+  #replyPreview .close { float: right; cursor: pointer; color: #8696a0; }
+  #composer input[type=text] { flex: 1; padding: 10px 14px; border: none; border-radius: 20px; font-size: 15px; background: #2a3942; color: #e9edef; }
   #composer input::placeholder { color: #8696a0; }
-  #composer button { margin-left: 8px; padding: 10px 20px; border: none; border-radius: 20px; background: #00a884; color: #fff; cursor: pointer; }
+  #composer button, #composer label { margin-left: 6px; padding: 8px 12px; border: none; border-radius: 20px; background: #2a3942; color: #e9edef; cursor: pointer; font-size: 16px; }
+  #composer button.send, #composer .send { background: #00a884; color: #fff; }
+  #composer button.recording { background: #d32f2f; color: #fff; }
+
+  #attachMenu { display: none; position: absolute; bottom: 56px; left: 10px; background: #2a3942; border-radius: 8px; padding: 8px; z-index: 15; }
+  #attachMenu button { display: block; width: 100%; text-align: left; margin: 2px 0; background: none; color: #e9edef; border: none; padding: 8px; cursor: pointer; border-radius: 6px; }
+  #attachMenu button:hover { background: #3a4750; }
+
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 30; align-items: center; justify-content: center; }
+  .modal { background: #202c33; color: #e9edef; padding: 20px; border-radius: 8px; width: 320px; }
+  .modal input { width: 100%; padding: 8px; margin: 6px 0; background: #2a3942; border: none; color: #e9edef; border-radius: 4px; }
+  .modal button { margin-top: 8px; padding: 8px 16px; background: #00a884; border: none; color: #fff; border-radius: 4px; cursor: pointer; }
+
+  .reaction-picker { display: none; position: absolute; top: -36px; background: #2a3942; border-radius: 20px; padding: 4px 8px; gap: 4px; z-index: 10; }
+  .reaction-picker span { cursor: pointer; font-size: 18px; }
 </style>
 </head>
 <body>
@@ -51,161 +86,42 @@
 </div>
 
 <div id="app">
-  <div id="sidebar"></div>
-  <div id="main">
-    <div id="chatHeader"><span id="chatName"></span><span class="status" id="chatStatus"></span></div>
-    <div id="messages"></div>
-    <div id="composer">
-      <input id="msgInput" placeholder="Type a message" onkeydown="if(event.key==='Enter') sendMessage(); else onTyping()" />
-      <button onclick="sendMessage()">Send</button>
+  <div id="sidebar">
+    <div id="sidebarTop">
+      <input id="searchBox" placeholder="Search chats or messages" oninput="onSearch()" />
+      <button onclick="toggleStarred()">⭐</button>
     </div>
+    <div id="chatList"></div>
+    <div id="starredList" style="display:none;"></div>
+    <div id="searchResults" style="display:none;"></div>
   </div>
-</div>
 
-<script>
-let token = localStorage.getItem('wa_token') || ''
-let activeJid = null
-let chatsCache = []
-let typingTimeout = null
+  <div id="main">
+    <div id="chatHeader">
+      <div class="left"><span id="chatName"></span><span class="status" id="chatStatus"></span></div>
+      <button id="groupInfoBtn" onclick="toggleGroupPanel()" style="display:none;">ⓘ</button>
+    </div>
 
-if (token) {
-  document.getElementById('tokenInput').value = token
-  boot()
-}
+    <div id="groupPanel">
+      <h3>Group Info</h3>
+      <div id="groupParticipants"></div>
+      <button onclick="toggleGroupPanel()" style="margin-top:12px;">Close</button>
+    </div>
 
-function login () {
-  token = document.getElementById('tokenInput').value.trim()
-  if (!token) return
-  localStorage.setItem('wa_token', token)
-  boot()
-}
+    <div id="messages"></div>
 
-async function boot () {
-  const res = await fetch('/api/chats?token=' + encodeURIComponent(token))
-  if (!res.ok) { alert('Invalid token'); return }
-  document.getElementById('login').style.display = 'none'
-  document.getElementById('app').style.display = 'flex'
-  await loadChats()
-  connectStream()
-}
+    <div id="composer">
+      <div id="replyPreview">
+        <span class="close" onclick="cancelReply()">✕</span>
+        <div id="replyPreviewText"></div>
+      </div>
 
-async function loadChats () {
-  const res = await fetch('/api/chats?token=' + encodeURIComponent(token))
-  chatsCache = await res.json()
-  const sidebar = document.getElementById('sidebar')
-  sidebar.innerHTML = ''
-  for (const chat of chatsCache) {
-    const div = document.createElement('div')
-    div.className = 'chat-item' + (chat.jid === activeJid ? ' active' : '')
-    div.onclick = () => openChat(chat.jid, chat.name)
-    const preview = chat.lastMessage
-      ? (chat.lastMessage.type !== 'text' ? '[' + chat.lastMessage.type + ']' : chat.lastMessage.text)
-      : ''
-    div.innerHTML = `<img class="avatar" src="${chat.avatarUrl || ''}" onerror="this.style.background='#667781';this.removeAttribute('src')" />
-      <div class="chat-meta"><div class="name">${escapeHtml(chat.name)}</div><div class="preview">${escapeHtml(preview)}</div></div>`
-    sidebar.appendChild(div)
-  }
-}
-
-async function openChat (jid, name) {
-  activeJid = jid
-  document.getElementById('chatName').textContent = name
-  document.getElementById('chatStatus').textContent = ''
-  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'))
-  await loadChats()
-
-  const res = await fetch(`/api/chats/${encodeURIComponent(jid)}/messages?token=${encodeURIComponent(token)}`)
-  const messages = await res.json()
-  const container = document.getElementById('messages')
-  container.innerHTML = ''
-  for (const m of messages) appendMessage(m)
-  container.scrollTop = container.scrollHeight
-}
-
-function ticksHtml (status) {
-  if (!status) return ''
-  if (status === 'sent') return '<span class="ticks">✓</span>'
-  if (status === 'delivered') return '<span class="ticks">✓✓</span>'
-  if (status === 'read') return '<span class="ticks read">✓✓</span>'
-  return ''
-}
-
-function mediaHtml (m) {
-  const url = `/api/media/${m.id}?token=${encodeURIComponent(token)}`
-  if (m.type === 'image') return `<img src="${url}" />` + (m.text ? `<div>${escapeHtml(m.text)}</div>` : '')
-  if (m.type === 'video') return `<video src="${url}" controls></video>`
-  if (m.type === 'audio') return `<audio src="${url}" controls></audio>`
-  return escapeHtml(m.text)
-}
-
-function appendMessage (m) {
-  const container = document.getElementById('messages')
-  const row = document.createElement('div')
-  row.className = 'msg-row ' + (m.fromMe ? 'mine' : 'theirs')
-  const bubble = document.createElement('div')
-  bubble.className = 'msg ' + (m.fromMe ? 'mine' : 'theirs')
-  bubble.dataset.id = m.id
-  const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  bubble.innerHTML = mediaHtml(m) + `<div class="meta">${time} ${m.fromMe ? ticksHtml(m.status) : ''}</div>`
-  row.appendChild(bubble)
-  container.appendChild(row)
-  container.scrollTop = container.scrollHeight
-}
-
-async function sendMessage () {
-  const input = document.getElementById('msgInput')
-  const text = input.value.trim()
-  if (!text || !activeJid) return
-  input.value = ''
-  await fetch(`/api/chats/${encodeURIComponent(activeJid)}/send?token=${encodeURIComponent(token)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
-  })
-}
-
-function onTyping () {
-  if (!activeJid) return
-  clearTimeout(typingTimeout)
-  typingTimeout = setTimeout(() => {
-    fetch(`/api/chats/${encodeURIComponent(activeJid)}/typing?token=${encodeURIComponent(token)}`, { method: 'POST' })
-  }, 200)
-}
-
-function connectStream () {
-  const es = new EventSource('/api/stream?token=' + encodeURIComponent(token))
-
-  es.addEventListener('message', (e) => {
-    const data = JSON.parse(e.data)
-    if (data.jid === activeJid) appendMessage(data.message)
-    loadChats()
-  })
-
-  es.addEventListener('status', (e) => {
-    const data = JSON.parse(e.data)
-    const bubble = document.querySelector(`.msg[data-id="${data.messageId}"]`)
-    if (bubble) {
-      const meta = bubble.querySelector('.meta')
-      const time = meta.textContent.split(' ')[0]
-      meta.innerHTML = `${time} ${ticksHtml(data.status)}`
-    }
-  })
-
-  es.addEventListener('presence', (e) => {
-    const data = JSON.parse(e.data)
-    if (data.jid === activeJid) {
-      document.getElementById('chatStatus').textContent =
-        data.state === 'composing' ? 'typing…' : (data.state === 'available' ? 'online' : '')
-    }
-  })
-}
-
-function escapeHtml (str) {
-  const div = document.createElement('div')
-  div.textContent = str || ''
-  return div.innerHTML
-}
-</script>
-
-</body>
-</html>
+      <button onclick="toggleAttachMenu()">➕</button>
+      <div id="attachMenu">
+        <button onclick="openModal('locationModal')">📍 Location</button>
+        <button onclick="openModal('contactModal')">👤 Contact</button>
+        <button onclick="fileInput('image')">🖼️ Image</button>
+        <button onclick="fileInput('video')">🎬 Video</button>
+        <button onclick="fileInput('gif')">GIF</button>
+        <button onclick="fileInput('sticker')">😀 Sticker (webp)</button>
+      </div>
